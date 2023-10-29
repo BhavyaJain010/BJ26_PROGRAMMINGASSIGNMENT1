@@ -19,35 +19,43 @@ public class CR_BJ26 {
 	public static void main(String[] args) throws InterruptedException {
 		SpringApplication.run(CR_BJ26.class, args);
 
+		// Here I have added the recognition of the task
 		processRecognitionTask();
 	}
 
 	private static void processRecognitionTask() {
-		S3_SERVICE_BJ26 dataStorage = new S3_SERVICE_BJ26();
-		S3Client dataClient = dataStorage.getS3Client();
+		// Here I have fetch the data from S3
+		List<S3Object> imageObjects = fetchS3ImageData();
 
-		List<S3Object> imageObjects = fetchS3ImageData(dataStorage, dataClient);
+		// Here I have handled the image recognition process
 		handleImageRecognition(imageObjects);
 	}
 
-	private static List<S3Object> fetchS3ImageData(S3_SERVICE_BJ26 dataStorage, S3Client dataClient) {
+	private static List<S3Object> fetchS3ImageData() {
+		S3_SERVICE_BJ26 dataStorage = new S3_SERVICE_BJ26();
+		S3Client dataClient = dataStorage.getS3Client();
+
 		return dataStorage.s3DataFetch(dataClient);
 	}
 
 	private static void handleImageRecognition(List<S3Object> imageObjects) {
+		// Here I have done the initialization of SQS service
 		SQS_SERVICE_BJ26 queueService = new SQS_SERVICE_BJ26();
 		SqsClient queueClient = queueService.getSqsClient();
 		String queueLocation = queueService.getQueueUrl(queueClient);
 
+		// Here the initialization of Rekognition service is done
 		RekognitionService_BJ26 carDetector = new RekognitionService_BJ26();
 		RekognitionClient detectorClient = carDetector.getRekognitionClient();
 
 		log.info("Current Queue URL: {}", queueLocation);
 
+		// Here I have Processed the images using Rekognition
 		for (S3Object imageObject : imageObjects) {
 			processImageWithRekognition(carDetector, detectorClient, imageObject, queueService, queueClient, queueLocation);
 		}
 
+		// This is to show that the signal end of queue processing id done
 		signalEndOfQueue(queueService, queueClient, queueLocation);
 	}
 
@@ -55,9 +63,11 @@ public class CR_BJ26 {
 													S3Object imageObject, SQS_SERVICE_BJ26 queueService,
 													SqsClient queueClient, String queueLocation) {
 
+		// Here the Recognition of image for car label is there
 		if (carDetector.recognize(detectorClient, imageObject, BUCKET_NAME)) {
 			log.info("Image '{}' has been identified with a car label.", imageObject.key());
 
+			// Here is the queries for sending messages to SQS for recognized image
 			if (queueService.pushMessage(queueClient, imageObject.key(), queueLocation)) {
 				log.info("Successfully sent message for image: '{}'", imageObject.key());
 			} else {
